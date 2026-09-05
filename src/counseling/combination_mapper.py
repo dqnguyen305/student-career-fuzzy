@@ -1,55 +1,117 @@
 import os
 import sys
 
-# Tự động thêm thư mục gốc dự án vào sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 import pandas as pd
-from src.config import DATA_PROCESSED_DIR, COMBINATIONS_MAP, BLOCK_DETAILS
+import numpy as np
+from src.config import DATA_PROCESSED_DIR, ALL_EXAM_COMBINATIONS, SUBJECT_MAP_VN
+
+# Ánh xạ từ tiền tố tên cột điểm (math, chemistry...) sang Tên Môn Tiếng Việt Chuẩn
+SUBJECT_PREFIX_MAP = {
+    'math': 'Toán',
+    'literature': 'Văn',
+    'physics': 'Lý',
+    'chemistry': 'Hóa',
+    'biology': 'Sinh',
+    'history': 'Sử',
+    'geography': 'Địa',
+    'english': 'Anh'
+}
+
+def extract_subject_averages(row: pd.Series) -> dict:
+    """
+    Gom nhóm tất cả các cột điểm (lớp 10, 11, 12_hk1) của từng môn 
+    và tính điểm trung bình môn cho học sinh.
+    Ví dụ: [math_10: 6.5, math_11: 7.3, math_12_hk1: 7.7] -> Toán: 7.17
+    """
+    subject_scores = {vn_name: [] for vn_name in SUBJECT_PREFIX_MAP.values()}
+
+    for col_name, val in row.items():
+        clean_col = str(col_name).lower().strip()
+        
+        # Bỏ qua nếu giá trị trống/NaN
+        if pd.isna(val):
+            continue
+        if pd.isna(val) or (isinstance(val, (int, float, np.number)) and float(val) <= 0):
+            continue
+
+        # Kiểm tra tiền tố môn học trong tên cột (ví dụ: chemistry_10 -> chemistry)
+        for prefix, vn_name in SUBJECT_PREFIX_MAP.items():
+            if clean_col.startswith(prefix):
+                try:
+                    subject_scores[vn_name].append(float(val))
+                except (ValueError, TypeError):
+                    pass
+                break
+
+    # Tính điểm trung bình môn của học sinh (nếu không có điểm thì mặc định 0.0)
+    final_avg = {}
+    for vn_name, scores in subject_scores.items():
+        if scores:
+            final_avg[vn_name] = float(np.mean(scores))
+        else:
+            final_avg[vn_name] = 0.0
+
+    return final_avg
+
 
 def map_subjects_to_combinations(top2_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ánh xạ Top 2 môn tự chọn đề xuất thành các tổ hợp kèm chi tiết tên môn thi.
-    """
     mapped_results = top2_df.copy()
+    
+    clean_scores_path = os.path.join(DATA_PROCESSED_DIR, "cleaned_scores.csv")
+    if not os.path.exists(clean_scores_path):
+        clean_scores_path = os.path.join(DATA_PROCESSED_DIR, "features.csv")
+
+    scores_df = pd.read_csv(clean_scores_path)
+
+    # Đảm bảo student_id là kiểu chuỗi chuẩn
+    if "student_id" in mapped_results.columns:
+        mapped_results["student_id"] = mapped_results["student_id"].astype(str).str.strip()
+    if "student_id" in scores_df.columns:
+        scores_df["student_id"] = scores_df["student_id"].astype(str).str.strip()
+
+    # Tính điểm trung bình các môn cho từng học sinh và lưu vào dict theo student_id
+    student_scores_dict = {}
+    for idx, row in scores_df.iterrows():
+        s_id = str(row.get("student_id", idx)).strip()
+        student_scores_dict[s_id] = extract_subject_averages(row)
+
     combinations_list = []
 
-    for i in range(len(mapped_results)):
-        sub1 = mapped_results.loc[i, "top1_subject"]
-        sub2 = mapped_results.loc[i, "top2_subject"]
+    for idx, row in mapped_results.iterrows():
+        s_id = str(row.get("student_id", idx)).strip()
+        
+        # Lấy bảng điểm môn của học sinh (nếu lệch ID thì lấy theo dòng index)
+        scores_map = student_scores_dict.get(s_id, {})
+        if not scores_map and idx in scores_df.index:
+            fallback_id = str(scores_df.iloc[idx].get("student_id", idx)).strip()
+            scores_map = student_scores_dict.get(fallback_id, {})
 
-        # Sắp xếp 2 môn theo thứ tự bảng chữ cái
-        pair = tuple(sorted([sub1, sub2]))
+        # Tên 2 môn tự chọn
+        sub1_eng = str(row.get("top1_subject", "")).lower().strip()
+        sub2_eng = str(row.get("top2_subject", "")).lower().strip()
+        
+        sub1_vn = SUBJECT_MAP_VN.get(sub1_eng, row.get("top1_subject"))
+        sub2_vn = SUBJECT_MAP_VN.get(sub2_eng, row.get("top2_subject"))
 
-        # Lấy danh sách mã khối thi
-        matched_blocks = COMBINATIONS_MAP.get(pair, ["D01"])
+        student_4_subjects = set(["Toán", "Văn", sub1_vn, sub2_vn])
+        valid_combis = []
 
-        # Chuyển đổi từ mã khối sang dạng có chi tiết môn: "A00 (Toán, Lý, Hóa)"
-        detailed_blocks = [BLOCK_DETAILS.get(code, code) for code in matched_blocks]
+        for code, subjects in ALL_EXAM_COMBINATIONS.items():
+            if set(subjects).issubset(student_4_subjects):
+                # Tính tổng điểm 3 môn từ điểm trung bình các năm
+                total_score = sum(scores_map.get(sub, 0.0) for sub in subjects)
+                subjects_str = f"({', '.join(subjects)})"
+                valid_combis.append((code, round(total_score, 2), subjects_str))
 
-        # Ghép các khối lại bằng dấu phẩy
-        combinations_list.append(" | ".join(detailed_blocks))
+        valid_combis.sort(key=lambda x: x[1], reverse=True)
+        top4 = valid_combis[:4]
+        
+        combi_text = " | ".join([f"{code} {subs}: {score:.2f}" for code, score, subs in top4])
+        combinations_list.append(combi_text)
 
     mapped_results["suggested_combinations"] = combinations_list
     return mapped_results
-
-if __name__ == "__main__":
-    try:
-        top2_path = os.path.join(DATA_PROCESSED_DIR, "top2_recommendations.csv")
-        if not os.path.exists(top2_path):
-            raise FileNotFoundError("❌ Chưa có top2_recommendations.csv, hãy chạy subject_recommender.py trước.")
-
-        top2_df = pd.read_csv(top2_path)
-        print("🔄 Đang ánh xạ Top 2 môn sang Tổ hợp xét tuyển chi tiết...")
-
-        final_recommendations = map_subjects_to_combinations(top2_df)
-
-        output_path = os.path.join(DATA_PROCESSED_DIR, "final_counseling_results.csv")
-        final_recommendations.to_csv(output_path, index=False, encoding="utf-8-sig")
-
-        print(f"✅ Đã lưu báo cáo tư vấn tổ hợp chi tiết tại: {output_path}")
-        print("\n--- Xem 3 kết quả đầu tiên ---")
-        print(final_recommendations[["student_name", "top1_subject", "top2_subject", "suggested_combinations"]].head(3))
-
-    except Exception as err:
-        print(f"❌ Lỗi Mapper: {err}")

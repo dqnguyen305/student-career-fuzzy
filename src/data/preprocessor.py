@@ -25,15 +25,14 @@ def preprocess_student_data(file_path: str = RAW_EXCEL_PATH) -> pd.DataFrame:
     cleaned_df["student_name"] = df_raw.iloc[:, 2]
     cleaned_df["class"] = df_raw.iloc[:, 1]
 
-    # 2. Offset chuẩn xác theo từng môn:
-    # 0: Toán, 1: Lý, 2: Hóa, 3: Sinh, 5: Văn, 6: GDĐP, 7: Sử, 8: Anh
+    # 2. Offset các môn theo cấu trúc Excel hiện tại.
     subject_offsets = {
         "math": 0,
         "physics": 1,
         "chemistry": 2,
         "biology": 3,
         "literature": 5,
-        "geography": 6,  # Cột Giáo dục địa phương / Địa lý trong file
+        "geography": 6,
         "history": 7,
         "english": 8
     }
@@ -52,6 +51,19 @@ def preprocess_student_data(file_path: str = RAW_EXCEL_PATH) -> pd.DataFrame:
             if col_idx < df_raw.shape[1]:
                 col_name = f"{sub_key}_{period_code}"
                 cleaned_df[col_name] = pd.to_numeric(df_raw.iloc[:, col_idx], errors='coerce')
+
+    expected_score_cols = [
+        f"{subject}_{period}" for period in periods_start_idx
+        for subject in subject_offsets
+    ]
+    missing_score_cols = [
+        col for col in expected_score_cols if col not in cleaned_df.columns
+    ]
+    if missing_score_cols:
+        raise ValueError(
+            "Thiếu cột điểm bắt buộc sau khi đọc Excel: "
+            + ", ".join(missing_score_cols)
+        )
 
     # 4. Lọc bỏ các dòng không hợp lệ
     cleaned_df = cleaned_df.dropna(subset=["student_name"]).reset_index(drop=True)

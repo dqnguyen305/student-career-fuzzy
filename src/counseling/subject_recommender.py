@@ -14,15 +14,39 @@ from src.config import (
     WEIGHT_TREND_SCORE
 )
 
-# Ánh xạ môn tự chọn với Nhóm cụm năng lực tương ứng
-SUBJECT_TO_CLUSTER_MAP = {
-    "physics": "membership_Tự nhiên",
-    "chemistry": "membership_Tự nhiên",
-    "biology": "membership_Tự nhiên",
-    "history": "membership_Xã hội",
-    "geography": "membership_Xã hội",
-    "english": "membership_Ngoại ngữ"
+# Ánh xạ môn tự chọn với từ khóa đại diện cho Nhóm cụm năng lực tương ứng
+SUBJECT_TO_DOMAIN_KEYWORD = {
+    "physics": "Tự nhiên",
+    "chemistry": "Tự nhiên",
+    "biology": "Tự nhiên",
+    "history": "Xã hội",
+    "geography": "Xã hội",
+    "english": "Ngoại ngữ"
 }
+
+DOMAIN_SCORE_COLUMNS = {
+    "Tự nhiên": "natural_score",
+    "Xã hội": "social_score",
+    "Ngoại ngữ": "english_score"
+}
+
+def normalize_trend_score(trend_val: float, min_val: float = -2.0, max_val: float = 2.0) -> float:
+    """
+    Chuẩn hóa xu hướng tiến bộ trend_val về khoảng [0, 1] theo Linear Min-Max Clipping.
+    """
+    clipped = np.clip(trend_val, min_val, max_val)
+    return float((clipped - min_val) / (max_val - min_val))
+
+
+def find_membership_col(membership_cols: list[str], keyword: str) -> str | None:
+    """
+    Tìm tên cột membership phù hợp nhất chứa từ khóa domain (ví dụ: 'Tự nhiên', 'Xã hội', 'Ngoại ngữ').
+    """
+    for col in membership_cols:
+        if keyword.lower() in col.lower():
+            return col
+    return None
+
 
 def recommend_top_subjects(
     features_df: pd.DataFrame,
@@ -30,39 +54,65 @@ def recommend_top_subjects(
     membership_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Tính FinalScore cho các môn tự chọn (trừ Toán và Văn) và đề xuất Top 2 môn.
+    Tính FinalScore cho các môn tự chọn và đề xuất Top 2 môn phù hợp nhất cho từng học sinh.
     """
-    recommendations = []
+    # 1. Khắc phục triệt để trùng lặp cột & index
+    df_feat = features_df.loc[:, ~features_df.columns.duplicated()].reset_index(drop=True)
+    df_mem = membership_df.loc[:, ~membership_df.columns.duplicated()].reset_index(drop=True)
 
-    for i in range(len(features_df)):
-        student_id = features_df.loc[i, "student_id"]
-        student_name = features_df.loc[i, "student_name"]
-        student_class = features_df.loc[i, "class"]
+    recommendations = []
+    membership_cols = [c for c in df_mem.columns if c.startswith("membership_")]
+
+    for i in range(len(df_feat)):
+        # Lấy thông tin học sinh an toàn bằng .iat
+        student_id = str(df_feat["student_id"].iat[i])
+        student_name = str(df_feat["student_name"].iat[i])
+        student_class = str(df_feat["class"].iat[i])
 
         subject_scores = {}
 
         for sub in OPTIONAL_SUBJECTS:
-            # 1. Subject Score (Điểm trung bình môn đã chuẩn hóa [0, 1])
-            avg_score_scaled = scaled_df.loc[i, sub] if sub in scaled_df.columns else 0.0
+            # 1. Subject Score: Lấy điểm TB môn từ features_df
+            avg_col = f"{sub}_avg"
+            if avg_col in df_feat.columns:
+                val = df_feat[avg_col].iat[i]
+                avg_score_scaled = float(np.ravel(val)[0]) / 10.0
+            else:
+                avg_score_scaled = 0.0
 
-            # 2. Cluster Fit (Mức độ thuộc cụm mờ tương ứng)
-            cluster_col = SUBJECT_TO_CLUSTER_MAP.get(sub)
-            cluster_fit = membership_df.loc[i, cluster_col] if cluster_col in membership_df.columns else 0.0
+            # 2. Cluster Fit: Lấy độ thuộc cụm từ membership_df dùng .iat để đảm bảo trả về float duy nhất
+            domain_kw = SUBJECT_TO_DOMAIN_KEYWORD.get(sub, "")
+            cluster_col = find_membership_col(membership_cols, domain_kw)
+            
+            if cluster_col and cluster_col in df_mem.columns:
+                raw_mem = df_mem[cluster_col].iat[i]
+                # Sử dụng np.ravel để ép phẳng dữ liệu nếu lỡ bị trả về dạng mảng/Series
+                cluster_fit = float(np.ravel(raw_mem)[0])
+            else:
+                domain_score_col = DOMAIN_SCORE_COLUMNS.get(domain_kw)
+                if domain_score_col and domain_score_col in df_feat.columns:
+                    cluster_fit = float(df_feat[domain_score_col].iat[i]) / 10.0
+                else:
+                    cluster_fit = 0.0
 
-            # 3. Trend Score (Tính xu hướng tiến bộ chuẩn hóa)
-            trend_val = features_df.loc[i, f"{sub}_trend"] if f"{sub}_trend" in features_df.columns else 0.0
-            # Biến đổi trend [-10, 10] về khoảng [0, 1] bằng Sigmoid hoặc Min-Max đơn giản
-            trend_score = 1.0 / (1.0 + np.exp(-trend_val))
+            # 3. Trend Score: Chuẩn hóa điểm xu hướng tiến bộ
+            trend_col = f"{sub}_trend"
+            if trend_col in df_feat.columns:
+                raw_trend = df_feat[trend_col].iat[i]
+                trend_val = float(np.ravel(raw_trend)[0])
+            else:
+                trend_val = 0.0
+            trend_score = normalize_trend_score(trend_val)
 
-            # 4. Tính Final Score có trọng số
+            # 4. Tính Final Score
             final_score = (
-                WEIGHT_SUBJECT_SCORE * avg_score_scaled +
-                WEIGHT_CLUSTER_FIT * cluster_fit +
-                WEIGHT_TREND_SCORE * trend_score
+                float(WEIGHT_SUBJECT_SCORE) * avg_score_scaled +
+                float(WEIGHT_CLUSTER_FIT) * cluster_fit +
+                float(WEIGHT_TREND_SCORE) * trend_score
             )
             subject_scores[sub] = final_score
 
-        # Sắp xếp chọn Top 2 môn
+        # Sắp xếp chọn Top 2 môn có điểm cao nhất
         sorted_subs = sorted(subject_scores.items(), key=lambda x: x[1], reverse=True)
         top1_sub, top1_score = sorted_subs[0]
         top2_sub, top2_score = sorted_subs[1]
@@ -79,11 +129,15 @@ def recommend_top_subjects(
 
     return pd.DataFrame(recommendations)
 
+
 if __name__ == "__main__":
     try:
         features_path = os.path.join(DATA_PROCESSED_DIR, "features.csv")
         scaled_path = os.path.join(DATA_PROCESSED_DIR, "normalized_scores.csv")
         membership_path = os.path.join(DATA_PROCESSED_DIR, "membership.csv")
+
+        if not os.path.exists(features_path) or not os.path.exists(membership_path):
+            raise FileNotFoundError("❌ Thiếu file features.csv hoặc membership.csv. Hãy chạy fcm.py trước!")
 
         features_df = pd.read_csv(features_path)
         scaled_df = pd.read_csv(scaled_path)

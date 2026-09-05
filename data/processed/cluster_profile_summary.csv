@@ -1,0 +1,4 @@
+﻿Nhóm năng lực,Số học sinh,Tỷ lệ (%),Độ thuộc TB,Môn thế mạnh nhất,Môn yếu nhất,TB_math,SD_math,TB_physics,SD_physics,TB_chemistry,SD_chemistry,TB_biology,SD_biology,TB_literature,SD_literature,TB_geography,SD_geography,TB_history,SD_history,TB_english,SD_english
+Nhóm Ngoại ngữ,173,74.57,0.3997,english,history,6.8,0.58,6.84,0.6,7.35,0.45,7.76,0.49,7.8,0.47,7.27,0.48,5.89,0.55,7.8,0.55
+Nhóm Tự nhiên,38,16.38,0.4078,math,english,7.53,0.68,7.38,0.57,7.8,0.7,7.36,0.42,7.64,0.38,6.94,0.44,6.73,0.78,6.21,0.65
+Nhóm Xã hội,21,9.05,0.3967,history,english,6.8,0.44,6.72,0.54,7.4,0.48,7.27,0.47,7.8,0.4,7.22,0.48,7.01,0.63,6.15,0.87

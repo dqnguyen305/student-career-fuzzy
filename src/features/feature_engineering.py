@@ -6,6 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 import pandas as pd
 import numpy as np
+import joblib
 from sklearn.preprocessing import MinMaxScaler
 from src.config import DATA_PROCESSED_DIR
 
@@ -13,7 +14,8 @@ ALL_SUBJECTS = ["math", "physics", "chemistry", "biology", "literature", "geogra
 
 def create_features(df_clean: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, MinMaxScaler]:
     """
-    Tính điểm trung bình (xử lý bỏ qua điểm 0 lỗi), xu hướng tiến bộ và chuẩn hóa [0, 1].
+    Tính điểm trung bình các môn, gom nhóm 3 miền năng lực (Tự nhiên, Xã hội, Ngoại ngữ) 
+    và chuẩn hóa [0, 1] cho FCM với trọng số bình đẳng 1:1:1.
     """
     features_df = pd.DataFrame()
     features_df["student_id"] = df_clean["student_id"]
@@ -31,33 +33,36 @@ def create_features(df_clean: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame,
         if col_10 in df_clean.columns and col_11 in df_clean.columns and col_12 in df_clean.columns:
             avg_col_name = f"{sub}_avg"
             
-            # Thay thế điểm <= 0 bằng NaN để không làm kéo tụt điểm trung bình khi bị thiếu dữ liệu kỳ đó
+            # Thay thế điểm <= 0 bằng NaN để không kéo tụt điểm trung bình khi thiếu dữ liệu
             sub_scores = df_clean[[col_10, col_11, col_12]].replace(0, np.nan)
             
             # Tính trung bình các kỳ có điểm hợp lệ (> 0)
             features_df[avg_col_name] = sub_scores.mean(axis=1).round(2)
-            
-            # Nếu tất cả các kỳ đều bằng 0, điền mặc định 0.0
             features_df[avg_col_name] = features_df[avg_col_name].fillna(0.0)
             avg_cols.append(avg_col_name)
             
-            # Xu hướng tiến bộ: So sánh HK1 Lớp 12 với trung bình Lớp 10 + 11 (bỏ qua điểm 0)
+            # Xu hướng tiến bộ: So sánh HK1 Lớp 12 với trung bình Lớp 10 + 11
             prev_avg = df_clean[[col_10, col_11]].replace(0, np.nan).mean(axis=1)
             features_df[f"{sub}_trend"] = (df_clean[col_12] - prev_avg).fillna(0.0).round(2)
 
-    # 2. Chuẩn hóa về thang [0, 1] cho FCM bằng cách chia 10 (giữ nguyên bản chất điểm gốc 0-10)
-    # Không dùng MinMaxScaler vì nó làm bóp méo khoảng cách điểm thực tế giữa các môn
+    # 2. BỔ SUNG: Gom nhóm 3 miền năng lực đại diện để tránh Feature Count Imbalance
+    features_df["natural_score"] = features_df[["math_avg", "physics_avg", "chemistry_avg", "biology_avg"]].mean(axis=1).round(2)
+    features_df["social_score"] = features_df[["literature_avg", "history_avg", "geography_avg"]].mean(axis=1).round(2)
+    features_df["english_score"] = features_df["english_avg"]
+
+    # 3. Chuẩn hóa về [0, 1], sau đó đưa mỗi học sinh về cùng mặt phẳng
+    # tổng bằng 0 để FCM học miền nổi trội thay vì học chênh lệch mức điểm.
+    domain_cols = ["natural_score", "social_score", "english_score"]
+
     scaler = MinMaxScaler(feature_range=(0, 1))
-    
-    # Lấy dữ liệu điểm trung bình
-    X_raw = features_df[avg_cols].values
-    
-    # Fit scaler trên khung cố định điểm từ 0 đến 10
-    scaler.fit(np.array([[0]*len(avg_cols), [10]*len(avg_cols)]))
-    X_scaled_array = scaler.transform(X_raw)
-    
-    scaled_col_names = [col.replace("_avg", "") for col in avg_cols]
-    X_scaled_df = pd.DataFrame(X_scaled_array, columns=scaled_col_names, index=features_df.index)
+    scaler.fit(np.array([[0, 0, 0], [10, 10, 10]]))
+    domain_scaled = scaler.transform(features_df[domain_cols].values)
+    relative_scores = domain_scaled - domain_scaled.mean(axis=1, keepdims=True)
+    X_scaled_df = pd.DataFrame(relative_scores, columns=["natural", "social", "english"], index=features_df.index)
+
+    # Lưu Scaler ra file để sử dụng đồng bộ tại Tab 2 Streamlit Real-time
+    scaler_path = os.path.join(DATA_PROCESSED_DIR, "minmax_scaler.pkl")
+    joblib.dump(scaler, scaler_path)
 
     return features_df, X_scaled_df, scaler
 
@@ -80,8 +85,5 @@ if __name__ == "__main__":
 
         print(f"✅ Đã lưu tập đặc trưng đầy đủ tại: {features_path}")
         print(f"✅ Đã lưu tập dữ liệu chuẩn hóa [0, 1] tại: {scaled_path}")
-        
-        print("\n--- Xem 3 dòng đầu của điểm trung bình môn (features.csv) ---")
-        print(features_df[["student_name", "english_avg", "physics_avg", "chemistry_avg"]].head(3))
     except Exception as err:
         print(f"❌ Lỗi Feature Engineering: {err}")
