@@ -275,22 +275,7 @@ with tab2:
                 user_avg_dict, centroids_df, m=FCM_FUZZINESS
             )
 
-            business_profile = pred_membership.idxmax().replace("membership_", "").split(".")[0]
-            best_membership_score = pred_membership.max()
-            prediction_summary = membership_summary(pred_membership)
-
             st.markdown("---")
-            st.success(
-                f"🎯 **Dự đoán năng lực:** Học sinh có thiên hướng thuộc cụm "
-                f"**[{business_profile}]** với độ thuộc mờ $u = "
-                f"{best_membership_score:.4f}$ ({best_membership_score*100:.1f}%)"
-            )
-            st.info(
-                f"🔀 **Mức độ giao thoa:** {prediction_summary['overlap']:.1%}. "
-                f"Cụm thứ hai là **{prediction_summary['second_cluster']}** "
-                f"với độ thuộc {prediction_summary['second_score']:.1%}; "
-                f"entropy phân bố là {prediction_summary['entropy']:.1%}."
-            )
 
             col_res1, col_res2 = st.columns(2)
             
