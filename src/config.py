@@ -7,16 +7,20 @@ DATA_PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 RAW_EXCEL_PATH = os.path.join(DATA_RAW_DIR, "student_scores.xlsx")
 
 # Danh sách môn tính điểm chính
-CORE_SUBJECTS = ["Toán", "Lý", "Hóa", "Sinh", "Văn", "Địa", "Sử", "Anh"]
+CORE_SUBJECTS = ["Toán", "Lý", "Hóa", "Sinh", "Tin học", "Văn", "Địa", "Sử", "Anh"]
 
 # Danh sách môn tự chọn đề xuất (Key tiếng Anh)
-OPTIONAL_SUBJECTS = ["physics", "chemistry", "biology", "history", "geography", "english"]
+OPTIONAL_SUBJECTS = [
+    "physics", "chemistry", "biology", "informatics",
+    "history", "geography", "english"
+]
 
 # Ánh xạ Key tiếng Anh -> Tên môn tiếng Việt
 SUBJECT_MAP_VN = {
     "physics": "Lý",
     "chemistry": "Hóa",
     "biology": "Sinh",
+    "informatics": "Tin học",
     "history": "Sử",
     "geography": "Địa",
     "english": "Anh",
@@ -72,4 +76,11 @@ ALL_EXAM_COMBINATIONS = {
     'D13': ['Văn', 'Sinh', 'Anh'],
     'D14': ['Văn', 'Sử', 'Anh'],
     'D15': ['Văn', 'Địa', 'Anh'],
+    'X26': ['Toán', 'Anh', 'Tin học'],
+    'X02': ['Toán', 'Văn', 'Tin học'],
+    'X06': ['Toán', 'Lý', 'Tin học'],
+    'X14': ['Toán', 'Sinh', 'Tin học'],
+    'X10': ['Toán', 'Hóa', 'Tin học'],
+    'X22': ['Toán', 'Địa', 'Tin học'],
+    'X71': ['Văn', 'Sử', 'Tin học'],
 }

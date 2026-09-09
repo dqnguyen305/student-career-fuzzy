@@ -3,10 +3,10 @@ import plotly.graph_objects as go
 
 def plot_student_radar(student_features: pd.Series, student_name: str = "") -> go.Figure:
     """
-    Tạo biểu đồ Radar hiển thị điểm trung bình 8 môn của học sinh.
+    Tạo biểu đồ Radar hiển thị điểm trung bình 9 môn của học sinh.
     """
     categories = [
-        "Toán", "Lý", "Hóa", "Sinh", 
+        "Toán", "Lý", "Hóa", "Sinh", "Tin học",
         "Văn", "Địa", "Sử", "Anh"
     ]
     
@@ -15,6 +15,7 @@ def plot_student_radar(student_features: pd.Series, student_name: str = "") -> g
         student_features.get("physics_avg", 0),
         student_features.get("chemistry_avg", 0),
         student_features.get("biology_avg", 0),
+        student_features.get("informatics_avg", 0),
         student_features.get("literature_avg", 0),
         student_features.get("geography_avg", 0),
         student_features.get("history_avg", 0),

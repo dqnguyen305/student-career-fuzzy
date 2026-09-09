@@ -31,6 +31,7 @@ def preprocess_student_data(file_path: str = RAW_EXCEL_PATH) -> pd.DataFrame:
         "physics": 1,
         "chemistry": 2,
         "biology": 3,
+        "informatics": 4,
         "literature": 5,
         "geography": 6,
         "history": 7,
@@ -92,7 +93,7 @@ if __name__ == "__main__":
         df_cleaned.to_csv(output_path, index=False, encoding="utf-8-sig")
         
         print(f"✅ Đã xử lý xong! Dữ liệu sạch lưu tại: {output_path}")
-        print(f"\n--- Tổng số cột bóc tách: {len(df_cleaned.columns)} (Kỳ vọng: 27 = 3 info + 24 điểm) ---")
+        print(f"\n--- Tổng số cột bóc tách: {len(df_cleaned.columns)} (Kỳ vọng: 30 = 3 info + 27 điểm) ---")
         print("Danh sách các cột điểm:")
         print(df_cleaned.columns.tolist())
         print("\n--- Kiểm tra 3 dòng điểm môn English 11 & History 12 HK1 ---")

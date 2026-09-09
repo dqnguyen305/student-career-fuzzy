@@ -19,6 +19,7 @@ SUBJECT_TO_DOMAIN_KEYWORD = {
     "physics": "Tự nhiên",
     "chemistry": "Tự nhiên",
     "biology": "Tự nhiên",
+    "informatics": "Tự nhiên",
     "history": "Xã hội",
     "geography": "Xã hội",
     "english": "Ngoại ngữ"

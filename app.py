@@ -119,7 +119,7 @@ def predict_fcm_membership(user_avg_dict, centroids_df, m=FCM_FUZZINESS):
     Dự đoán độ thuộc FCM Real-time đảm bảo khớp 100% thứ tự cột trong centroids.csv.
     """
     # 1. Tính điểm trung bình 3 miền năng lực [0, 10]
-    nat_score = np.mean([user_avg_dict.get(m, user_avg_dict.get(SUBJECT_MAP_VN.get(m, m), 0.0)) for m in ["math", "physics", "chemistry", "biology"]])
+    nat_score = np.mean([user_avg_dict.get(m, user_avg_dict.get(SUBJECT_MAP_VN.get(m, m), 0.0)) for m in ["math", "physics", "chemistry", "biology", "informatics"]])
     soc_score = np.mean([user_avg_dict.get(m, user_avg_dict.get(SUBJECT_MAP_VN.get(m, m), 0.0)) for m in ["literature", "history", "geography"]])
     eng_score = user_avg_dict.get("english", user_avg_dict.get("Anh", 0.0))
 
@@ -142,7 +142,8 @@ def predict_fcm_membership(user_avg_dict, centroids_df, m=FCM_FUZZINESS):
     radar_data = {}
     subjects_map = {
         'math': 'Toán', 'physics': 'Lý', 'chemistry': 'Hóa', 'biology': 'Sinh',
-        'literature': 'Văn', 'history': 'Sử', 'geography': 'Địa', 'english': 'Anh'
+        'informatics': 'Tin học', 'literature': 'Văn', 'history': 'Sử',
+        'geography': 'Địa', 'english': 'Anh'
     }
     for eng_k, vn_k in subjects_map.items():
         score = user_avg_dict.get(eng_k, user_avg_dict.get(vn_k, 0.0))
@@ -244,7 +245,8 @@ with tab2:
     
     subjects_list = [
         ('Toán', 'math'), ('Văn', 'literature'), ('Lý', 'physics'), ('Hóa', 'chemistry'),
-        ('Sinh', 'biology'), ('Sử', 'history'), ('Địa', 'geography'), ('Anh', 'english')
+        ('Sinh', 'biology'), ('Tin học', 'informatics'), ('Sử', 'history'),
+        ('Địa', 'geography'), ('Anh', 'english')
     ]
 
     with st.form("form_fcm_predict"):

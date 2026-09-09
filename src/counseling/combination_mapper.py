@@ -16,6 +16,7 @@ SUBJECT_PREFIX_MAP = {
     'physics': 'Lý',
     'chemistry': 'Hóa',
     'biology': 'Sinh',
+    'informatics': 'Tin học',
     'history': 'Sử',
     'geography': 'Địa',
     'english': 'Anh'

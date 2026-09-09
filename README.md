@@ -295,7 +295,7 @@ File Excel hiện tại cần giữ cấu trúc cột mà `preprocessor.py` đan
 
 - Hai dòng đầu là header.
 - Thông tin học sinh nằm ở các cột tên, lớp và mã học sinh theo cấu trúc hiện tại.
-- Mỗi giai đoạn có các cột môn theo thứ tự Toán, Lý, Hóa, Sinh, cột trung gian, Văn, Địa, Sử, Anh.
+- Mỗi giai đoạn có các cột môn theo thứ tự Toán, Lý, Hóa, Sinh, Tin học, Văn, Địa, Sử, Anh.
 - Có đủ ba giai đoạn: lớp 10, lớp 11 và lớp 12 học kỳ 1.
 
 Nếu thay đổi bố cục Excel, cần cập nhật `subject_offsets` và `periods_start_idx` trong `src/data/preprocessor.py`.

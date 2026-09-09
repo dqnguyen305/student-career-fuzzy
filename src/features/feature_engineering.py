@@ -10,7 +10,10 @@ import joblib
 from sklearn.preprocessing import MinMaxScaler
 from src.config import DATA_PROCESSED_DIR
 
-ALL_SUBJECTS = ["math", "physics", "chemistry", "biology", "literature", "geography", "history", "english"]
+ALL_SUBJECTS = [
+    "math", "physics", "chemistry", "biology", "informatics",
+    "literature", "geography", "history", "english"
+]
 
 def create_features(df_clean: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, MinMaxScaler]:
     """
@@ -46,7 +49,9 @@ def create_features(df_clean: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame,
             features_df[f"{sub}_trend"] = (df_clean[col_12] - prev_avg).fillna(0.0).round(2)
 
     # 2. BỔ SUNG: Gom nhóm 3 miền năng lực đại diện để tránh Feature Count Imbalance
-    features_df["natural_score"] = features_df[["math_avg", "physics_avg", "chemistry_avg", "biology_avg"]].mean(axis=1).round(2)
+    features_df["natural_score"] = features_df[[
+        "math_avg", "physics_avg", "chemistry_avg", "biology_avg", "informatics_avg"
+    ]].mean(axis=1).round(2)
     features_df["social_score"] = features_df[["literature_avg", "history_avg", "geography_avg"]].mean(axis=1).round(2)
     features_df["english_score"] = features_df["english_avg"]
 
