@@ -5,7 +5,7 @@ Hệ thống phân tích năng lực học sinh và tư vấn môn thi THPT dự
 Ứng dụng cung cấp hai cách sử dụng:
 
 - **Tra cứu theo danh sách lớp:** xem kết quả đã tính cho từng học sinh.
-- **Nhập điểm trực tiếp:** nhập điểm ba học kỳ và xem membership FCM theo thời gian thực.
+- **Nhập điểm trực tiếp:** nhập điểm ba học kỳ của 9 môn và xem membership theo thời gian thực.
 
 ## 1. Mục tiêu nghiệp vụ
 
@@ -50,6 +50,18 @@ Membership, hồ sơ cụm và đề xuất môn
 Tổ hợp xét tuyển + giao diện Streamlit
 ```
 
+### 2.0. Luồng chạy tổng quát
+
+Lệnh `src/main.py` là điểm vào chính và chạy tuần tự toàn bộ pipeline:
+
+1. Đọc Excel và làm sạch điểm.
+2. Tạo điểm trung bình, xu hướng và ba điểm miền năng lực.
+3. Chuẩn hóa dữ liệu, chạy FCM và tính các chỉ số đánh giá.
+4. Xuất membership, centroid, hồ sơ cụm và đề xuất hai môn tự chọn.
+5. Tìm tối đa bốn tổ hợp xét tuyển phù hợp cho mỗi học sinh.
+
+Các file trong `data/processed/` là dữ liệu trung gian và kết quả sinh tự động. Không sửa thủ công các file này vì lần chạy pipeline tiếp theo sẽ ghi đè chúng.
+
 ### 2.1. Tiền xử lý
 
 Module: `src/data/preprocessor.py`
@@ -59,7 +71,7 @@ Hệ thống đọc file Excel bằng `openpyxl`, bỏ hai dòng header đầu v
 - Mã học sinh.
 - Họ tên.
 - Lớp.
-- Điểm Toán, Lý, Hóa, Sinh, Văn, Địa, Sử, Anh ở ba giai đoạn:
+- Điểm Toán, Lý, Hóa, Sinh, Tin học, Văn, Địa, Sử, Anh ở ba giai đoạn:
   - Lớp 10.
   - Lớp 11.
   - Học kỳ 1 lớp 12.
@@ -67,6 +79,18 @@ Hệ thống đọc file Excel bằng `openpyxl`, bỏ hai dòng header đầu v
 Giá trị thiếu được thay bằng median của chính cột điểm. Nếu cả cột không có giá trị hợp lệ, hệ thống dùng `0.0`.
 
 Các điểm `0` khi tính trung bình môn được xem là dữ liệu thiếu để không kéo giảm điểm do chưa có dữ liệu.
+
+#### Schema Excel đầu vào
+
+Sau khi bỏ hai dòng header, chương trình dùng vị trí cột cố định:
+
+- Cột thông tin: lớp ở index `1`, họ tên ở index `2`, mã học sinh ở index `3`.
+- Điểm lớp 10 bắt đầu ở index `4`.
+- Điểm lớp 11 bắt đầu ở index `17`.
+- Điểm học kỳ 1 lớp 12 bắt đầu ở index `30`.
+- Trong mỗi giai đoạn, thứ tự 9 môn là: Toán, Vật lý, Hóa học, Sinh học, Tin học, Ngữ văn, Địa lý, Lịch sử, Tiếng Anh.
+
+Vì vậy, dữ liệu sạch có 30 cột: 3 cột thông tin và 27 cột điểm. Nếu thay đổi thứ tự hoặc số lượng cột trong Excel, cần cập nhật `subject_offsets` và `periods_start_idx` trong `src/data/preprocessor.py`.
 
 ### 2.2. Feature engineering
 
@@ -82,7 +106,7 @@ subject_trend = điểm lớp 12 HK1 - mean(điểm lớp 10, điểm lớp 11)
 Ba miền năng lực được tính như sau:
 
 ```text
-natural_score  = mean(Toán, Lý, Hóa, Sinh)
+natural_score  = mean(Toán, Lý, Hóa, Sinh, Tin học)
 social_score   = mean(Văn, Sử, Địa)
 english_score  = Anh
 ```
@@ -143,14 +167,14 @@ Xã hội    = (-1,  2, -1)
 Ngoại ngữ = (-1, -1,  2)
 ```
 
-Các vector được chuẩn hóa độ dài trước khi đo khoảng cách theo hướng. Vì vậy:
+Các vector được chuẩn hóa độ dài trước khi đo khoảng cách theo hướng. Hàm `calculate_membership_matrix` dùng softmax với `MEMBERSHIP_SCORE_SCALE` để chuyển điểm tương đồng thành membership. Vì vậy:
 
 - Điểm ba miền bằng nhau cho membership gần `33.33%` mỗi nhóm.
 - Tăng điểm Anh làm membership Ngoại ngữ tăng.
 - Hai nhóm còn lại giảm dần thay vì bị gán cứng vào `0%` ngay lập tức.
 - Tổng membership luôn bằng `1`.
 
-Membership được làm mềm bằng softmax trên điểm miền tương đối với `MEMBERSHIP_SCORE_SCALE = 4.0`.
+Membership được làm mềm bằng softmax trên điểm miền tương đối với `MEMBERSHIP_SCORE_SCALE = 4.0`. File `membership.csv` và giao diện dùng membership theo prototype nghiệp vụ; `evaluation_metrics.csv` dùng membership raw do FCM sinh ra để đánh giá đúng thuật toán.
 
 Trong giao diện, ngoài biểu đồ membership còn có:
 
@@ -210,6 +234,7 @@ Các môn tự chọn được xét:
 - Vật lý.
 - Hóa học.
 - Sinh học.
+- Tin học.
 - Lịch sử.
 - Địa lý.
 - Tiếng Anh.
@@ -236,6 +261,20 @@ Kết quả được sắp xếp giảm dần và lấy hai môn đầu tiên.
 Module: `src/counseling/combination_mapper.py`
 
 Hệ thống lấy Toán, Văn và hai môn tự chọn được đề xuất để tìm các tổ hợp phù hợp trong danh mục cấu hình tại `src/config.py`.
+
+Ngoài các tổ hợp A, B, C, D hiện có, hệ thống hỗ trợ các tổ hợp có Tin học:
+
+| Mã | Tổ hợp môn |
+| --- | --- |
+| `X26` | Toán, Tiếng Anh, Tin học |
+| `X02` | Toán, Ngữ văn, Tin học |
+| `X06` | Toán, Vật lí, Tin học |
+| `X14` | Toán, Sinh học, Tin học |
+| `X10` | Toán, Hóa học, Tin học |
+| `X22` | Toán, Địa lí, Tin học |
+| `X71` | Ngữ văn, Lịch sử, Tin học |
+
+Trong code, các tên môn rút gọn được dùng khi tính toán là `Toán`, `Văn`, `Lý`, `Hóa`, `Sinh`, `Tin học`, `Địa`, `Sử` và `Anh`.
 
 Với mỗi tổ hợp hợp lệ, hệ thống tính tổng điểm trung bình các môn và sắp xếp giảm dần. Kết quả cuối cùng chứa tối đa bốn tổ hợp đề xuất hàng đầu.
 
@@ -270,6 +309,8 @@ Với mỗi tổ hợp hợp lệ, hệ thống tính tổng điểm trung bình
 ├── results/                             # Hình ảnh và kết quả phân tích
 └── notebooks/                           # Notebook nghiên cứu
 ```
+
+Các thư mục `results/figures/`, `results/clustering/` và `results/radar/` dành cho hình ảnh hoặc kết quả phân tích bổ sung; pipeline chính không bắt buộc phải có file trong các thư mục này.
 
 ## 8. Cài đặt trên Windows
 
@@ -316,6 +357,29 @@ python src/main.py
 
 Pipeline sẽ tạo hoặc cập nhật các file trong `data/processed/`.
 
+Có thể chạy từng module để kiểm tra riêng từng giai đoạn, nhưng thứ tự nên là:
+
+```powershell
+python src\data\preprocessor.py
+python src\features\feature_engineering.py
+python src\clustering\fcm.py
+python src\counseling\subject_recommender.py
+```
+
+Trong sử dụng thông thường, nên chạy `python src\main.py` để bảo đảm mọi file đầu ra được đồng bộ cùng một lần xử lý dữ liệu.
+
+### 10.1. Grid search FCM
+
+Để chạy kiểm tra nhiều cấu hình FCM và lưu kết quả so sánh:
+
+```powershell
+python src\clustering\grid_search_fcm.py
+```
+
+Kết quả được lưu tại `data/processed/fcm_grid_search_results.csv`.
+
+Grid search hiện thử các số cụm `[2, 3, 4, 5]`, các giá trị hệ số mờ `[1.2, 1.3, 1.5, 1.7, 2.0]` và bốn seed `[10, 42, 100, 2024]`. Kết quả được sắp xếp theo Silhouette giảm dần, sau đó Xie-Beni tăng dần.
+
 ## 11. Chạy ứng dụng
 
 ```powershell
@@ -330,6 +394,13 @@ http://localhost:8501
 
 Nếu đã chạy pipeline sau khi mở ứng dụng, hãy tải lại trang hoặc khởi động lại Streamlit để giao diện đọc các CSV mới nhất.
 
+Giao diện có hai tab:
+
+- **Tra cứu theo danh sách lớp:** lọc lớp, chọn học sinh, xem hai môn ưu tiên, tối đa bốn tổ hợp xét tuyển, biểu đồ radar và membership của ba nhóm năng lực.
+- **Nhập điểm trực tiếp:** nhập điểm lớp 10, lớp 11 và học kỳ 1 lớp 12 cho 9 môn, sau đó xem radar và membership dự đoán theo thời gian thực.
+
+Tab nhập điểm yêu cầu `centroids.csv`, vì vậy cần chạy pipeline ít nhất một lần trước khi mở ứng dụng.
+
 ## 12. Các file đầu ra
 
 | File | Nội dung |
@@ -343,6 +414,7 @@ Nếu đã chạy pipeline sau khi mở ứng dụng, hãy tải lại trang ho�
 | `cluster_profile_summary.csv` | Thống kê môn học theo nhóm |
 | `cluster_class_distribution.csv` | Phân bố nhóm theo lớp |
 | `evaluation_metrics.csv` | FPC, FPE, Xie-Beni và chỉ số bổ sung |
+| `fcm_grid_search_results.csv` | Kết quả so sánh các cấu hình FCM |
 | `top2_recommendations.csv` | Hai môn tự chọn được đề xuất |
 | `final_counseling_results.csv` | Kết quả cuối cùng kèm tổ hợp xét tuyển |
 | `minmax_scaler.pkl` | Scaler được lưu để tái sử dụng |
@@ -355,6 +427,12 @@ Kiểm tra cú pháp các module chính:
 python -m py_compile app.py src\clustering\fcm.py src\clustering\evaluation.py src\main.py
 ```
 
+Kiểm tra đầy đủ các module chính:
+
+```powershell
+python -m py_compile app.py src\config.py src\data\preprocessor.py src\features\feature_engineering.py src\clustering\fcm.py src\clustering\evaluation.py src\counseling\subject_recommender.py src\counseling\combination_mapper.py
+```
+
 Kiểm tra membership có tổng bằng `1`:
 
 ```powershell
@@ -365,7 +443,7 @@ Kiểm thử nghiệp vụ nên bao gồm:
 
 - Ba miền điểm bằng nhau: membership gần `33.33%` mỗi nhóm.
 - Tăng riêng điểm Anh: membership Ngoại ngữ tăng dần.
-- Tăng riêng nhóm Toán-Lý-Hóa-Sinh: membership Tự nhiên tăng dần.
+- Tăng riêng nhóm Toán-Lý-Hóa-Sinh-Tin học: membership Tự nhiên tăng dần.
 - Tăng riêng nhóm Văn-Sử-Địa: membership Xã hội tăng dần.
 - Hồ sơ lai giữa hai miền: membership của hai nhóm cùng ở mức đáng kể.
 
@@ -377,7 +455,15 @@ Kiểm thử nghiệp vụ nên bao gồm:
 - Nếu dữ liệu thiếu nhiều học sinh Xã hội nổi trội, cụm Xã hội sẽ kém ổn định dù hệ thống vẫn phải hiển thị đủ ba nhóm theo yêu cầu nghiệp vụ.
 - Điểm đề xuất và tổ hợp chỉ mang tính tham khảo; cần đối chiếu quy chế tuyển sinh hiện hành.
 
-## 15. Cấu hình quan trọng
+## 15. Xử lý lỗi thường gặp
+
+- **Thiếu `student_scores.xlsx`:** đặt đúng file tại `data/raw/student_scores.xlsx`.
+- **Thiếu cột điểm bắt buộc:** kiểm tra số dòng header, vị trí ba nhóm cột điểm và thứ tự 9 môn trong Excel.
+- **Ứng dụng báo thiếu CSV:** chạy pipeline trước bằng `python src\main.py`, sau đó tải lại trang Streamlit.
+- **Đã thay đổi dữ liệu hoặc code feature:** luôn chạy lại pipeline để cập nhật `features.csv`, `centroids.csv`, `membership.csv` và các kết quả tư vấn.
+- **Không có tổ hợp đề xuất:** tổ hợp chỉ được tạo khi Toán, Văn và các môn cần thiết nằm trong bốn môn mà bộ recommender cung cấp cho học sinh.
+
+## 16. Cấu hình quan trọng
 
 Các tham số chính nằm trong `src/config.py`:
 
@@ -391,6 +477,6 @@ WEIGHT_TREND_SCORE = 0.1
 
 Khi thay đổi tham số FCM hoặc trọng số tư vấn, cần chạy lại `src/main.py` để cập nhật toàn bộ file đầu ra trước khi xem trên Streamlit.
 
-## 16. Lưu ý sử dụng
+## 17. Lưu ý sử dụng
 
 Luôn chạy pipeline sau khi thay file Excel hoặc thay đổi logic feature engineering. Không chỉnh thủ công `centroids.csv` hoặc `membership.csv`, vì các file này sẽ bị ghi đè ở lần chạy tiếp theo. Kết quả là công cụ hỗ trợ phân tích và tư vấn, không thay thế đánh giá của giáo viên, chuyên gia hướng nghiệp hoặc thông tin tuyển sinh chính thức.
